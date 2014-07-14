@@ -1,0 +1,32 @@
+.addsn {
+    display:block;
+    height:31px;
+}
+
+    .addsn .list {
+        display:none;
+        border: 1px solid #000000;
+        padding: 10px;
+        position:absolute;
+        margin-top: -1px;
+        z-index: 1;
+        min-width: 150px;
+        padding: 5px;
+        background-color: #ffffff;
+    }
+
+    .addsn:hover .head {
+        border: 1px solid #000000;
+        border-bottom: 0px solid #000000;
+        display: block;
+        padding: 5px;
+        position: relative;
+
+        width: 125px;
+        z-index: 10;
+        background-color: #ffffff;
+    }
+
+    .addsn:hover .list {
+        display: inline-block;
+    }

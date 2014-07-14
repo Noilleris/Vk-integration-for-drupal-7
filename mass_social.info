@@ -1,0 +1,9 @@
+name = mass_social
+description = Integration with digisale.pro service
+version = 7.x-1.0-dev
+core = 7.x
+
+files[] = forms/form-node.inc
+files[] = forms/forms-vk.inc
+scripts[] = js/mass_social.js
+configure = admin/config/user-interface/mass_social/list

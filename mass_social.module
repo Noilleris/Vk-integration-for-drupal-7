@@ -1,0 +1,472 @@
+<?php
+    function mass_social_menu() {
+        $items = array();
+        $items['admin/config/user-interface/mass_social'] = array(
+            'title'            => t('Social networks list'),
+            'page callback'    => 'mass_social_list',
+			'access callback' => 'user_access',
+			'access arguments' => array('administer site configuration'),
+        );
+
+        $items['admin/config/user-interface/mass_social/add/%'] = array(
+            'title'            => t('Add social network'),
+            'page callback'    => 'mass_social_add',
+            'page arguments'   => array(5),
+            'access arguments' => array('administer mass_social'),
+            'type'             => MENU_CALLBACK,
+            'file'             => 'form/forms-vk.inc'
+        );
+
+        $items['admin/config/user-interface/mass_social/edit/%'] = array(
+            'title'            => t('Edit social network'),
+            'page callback'    => 'mass_social_edit_network',
+            'page arguments'   => array(5),
+            'access arguments' => array('administer mass_social'),
+            'type'             => MENU_CALLBACK,
+            'file'             => 'form/forms-vk.inc'
+        );
+
+        $items['admin/config/user-interface/mass_social/delete/%'] = array(
+            'title'            => t('Remove social network'),
+            'page callback'    => 'mass_social_delete_wrap',
+            'page arguments'   => array(5),
+            'access arguments' => array('administer mass_social'),
+            'type'             => MENU_CALLBACK,
+        );
+
+        return $items;
+    }
+
+    /**
+     * Lists all registered purses.
+     */
+    function mass_social_list() {
+        $style = drupal_get_path('module', 'mass_social') . '/css/style.css';
+        echo '<link rel="stylesheet" type="text/css" href="/'.$style.'" />';
+        $header = array(
+            t('Social network id'),
+            t('Social network name'),
+            t('Edit'),
+            t('Delete')
+        );
+
+        //$result = db_query('SELECT * FROM {uc_webmoney_rates} ORDER BY type');
+        $query = db_select('mass_social', 'ms');
+        $query->fields('ms', array('id', 'network_name'));
+        $result = $query->execute();
+        $rows = array();
+        foreach ($result as $template) {
+            $rows[] = array(
+                $template->id,
+                $template->network_name,
+                l(t('Edit'), 'admin/config/user-interface/mass_social/edit/'. $template->id),
+                l(t('Delete'), 'admin/config/user-interface/mass_social/delete/'. $template->id)
+            );
+        }
+        $output = '';
+
+        $output .= '<div class="addsn">'.
+            '<div class="head">'.t('Add Social Network').'</div>'.
+            '<div class="list">'.
+                '<div>'.l(t('Add Vkontakte'), 'admin/config/user-interface/mass_social/add/vk').'</div>'
+            .'</div>'.
+        '</div>';
+
+        if (empty($rows)) {
+            $output .= '<p>'. t('You have no social networks yet.') .'</p>';
+        } else {
+            $output .= theme('table', array('header' => $header, 'rows' => $rows));
+        }
+
+
+        return $output;
+    }
+
+	function mass_social_settings_submit($form, &$form_state){
+		db_insert('tcompactmenu')->fields($form_state['values']['digisale_login'], $form_state['values']['digisale_hash'])->execute();
+		drupal_set_message(t('The tcompactmenu digisale saved'));
+	}
+
+    function mass_social_add($type){
+        switch ($type) {
+            case 'vk':
+                return drupal_get_form('mass_social_add_vk_group');
+                break;
+            case 1:
+                echo "i равно 1";
+                break;
+            case 2:
+                echo "i равно 2";
+                break;
+        }
+        die();
+        return $form;
+    }
+
+    function mass_social_edit_network($id){
+        $query = db_select('mass_social', 'ms');
+        $query->fields('ms', array('id', 'network_name', 'data'));
+        $query->condition('ms.id', $id, '=');
+        $result = $query->execute();
+        $s_network = $result->fetchAssoc();
+        if ($result && $s_network) {
+            $s_network['data'] = unserialize($s_network['data']);
+            return drupal_get_form('mass_social_add_vk_group', $s_network);
+        }
+        die();
+        return $form;
+    }
+
+
+    function mass_social_delete_wrap($sn_id) {
+        return drupal_get_form('mass_social_delete', $sn_id);
+    }
+
+    function mass_social_delete($form, &$form_state, $sn_id) {
+        $form['id'] = array(
+            '#type' => 'hidden',
+            '#default_value' =>$sn_id
+        );
+
+        $form['are_ure_sure'] = array(
+            '#type' => 'fieldset',
+            '#title' => t('Delete?'),
+            '#collapsible' => TRUE,
+            '#description' => t('You can undo deletion'),
+        );
+
+        $form['submit'] = array(
+            '#type' => 'submit',
+            '#value' => t('Delete')
+        );
+        return $form;
+    }
+
+    function mass_social_delete_submit($form, &$form_state) {
+        $query = db_delete('mass_social');
+        $query->condition('id', $form['id']["#value"]);
+        $num_updated = $query->execute();
+        $form_state['redirect'] = 'admin/config/user-interface/mass_social/list';
+        return $form;
+    }
+
+    function mass_social_form_node_type_form_alter(&$form, &$form_state) {
+        form_load_include($form_state, 'inc', 'mass_social', 'form/form-node');
+        _mass_social_process_node_settings_form($form);
+    }
+
+    function mass_social_form_node_form_alter(&$form, &$form_state) {
+
+        // Do not process node form if it is not contains node type.
+        if (empty($form['#node']->type)) {
+            return;
+        }
+
+        $user_access  = user_access('mass_social');
+        $type_enabled = variable_get('mass_social_node_enabled_' . $form['#node']->type);
+
+        // If node type matches all requirements we have to add new fields to form.
+        if ($user_access && $type_enabled) {
+            form_load_include($form_state, 'inc', 'mass_social', 'form/form-node');
+            _mass_social_node_form($form);
+        }
+    }
+
+    /**
+     * Implements hook_node_insert().
+     */
+    function mass_social_node_insert($node) {
+        // Post node to VK.
+        _mass_social_process_node($node);
+    }
+
+    /**
+     * Implements hook_node_update().
+     */
+    function mass_social_node_update($node) {
+        // Post node to VK.
+        _mass_social_process_node($node);
+    }
+
+    /**
+     * Process node and send it to VK if needed.
+     *
+     * @param $node
+     *   Node object during insert/update.
+     */
+    function _mass_social_process_node($node) {
+        $networks = array_values($node->ms_post_this_node);
+        $query = db_select('mass_social', 'ms');
+        $query->fields('ms', array('network_name', 'data'));
+        if (count($networks) > 0) {
+            if(count($networks)==1) {
+                $query->condition('ms.id', $networks[0], '=');
+            } else {
+                $query->condition('ms.id', $networks, 'IN');
+            }
+            $result = $query->execute();
+            $user_access  = user_access('mass_social');
+            foreach ($result as $item) {
+                $item->data = unserialize($item->data);
+                $access_token = $item->data['vkxp_token'];
+
+                // Check requiered data to post.
+                if ($access_token && $user_access) {
+                    // Get node data that will be crossposted.
+                    $message = _mass_social_get_node_message($node, $item->data);
+                    $images  = _mass_social_get_node_images($node, $item->data);
+                    $url     = url('node/' . $node->nid, array('absolute' => TRUE));
+
+                    // Post node to VK.
+                    _mass_social_post_to_wall($message, $images, $url, $item->data);
+                }
+            }
+        }
+    }
+
+    function _mass_social_get_node_images($node, $vk_data) {
+        $image_ids = '';
+
+        // Load image amount that should be sent to VK.
+        $image_amount = variable_get('mass_social_node_image_limit_' . $node->type, 0);
+        if ($image_amount) {
+
+            // Get node field name that contains image.
+            $field = variable_get('mass_social_node_image_field_' . $node->type, 0);
+
+            // Try to get images from node object.
+            $i = 0;
+            $items = field_get_items('node', $node, $field);
+            if (!empty($items) && is_array($items)) {
+                $images = array();
+                foreach ($items as $image) {
+                    if (isset($image['fid'])) {
+
+                        // If user set image limit we should check get only selected amount of images.
+                        if ($i++ == $image_amount) {
+                            break;
+                        }
+
+                        // Get real image path.
+                        $uri = file_load($image['fid'])->uri;
+                        $images[] = '@' . drupal_realpath($uri);
+                    }
+                }
+            }
+
+            // Upload images to vk server.
+            if (!empty($images)) {
+                $upload_url = _mass_social_get_upload_server($vk_data);
+                $image_ids  = _mass_social_upload_images($upload_url, $images, $vk_data);
+            }
+        }
+
+        return $image_ids;
+    }
+
+    /**
+     * Get message text from node.
+     *
+     * @param $node
+     *   Node object that should be crossposted.
+     *
+     * @return string
+     *   Message text.
+     */
+    function _mass_social_get_node_message($node) {
+
+        // Get message source.
+        $message_field = variable_get('mass_social_node_message_field_' . $node->type, 'title');
+        if ($message_field == 'title') {
+            $message = $node->title;
+        }
+        else {
+            $item    = field_get_items('node', $node, $message_field);
+            $message = trim(strip_tags($item[0]['value']));
+        }
+
+        // Trim message if needed.
+        $message_length = variable_get('mass_social_node_message_length_' . $node->type, 255);
+        if (!empty($message_length ) && drupal_strlen($message) > $message_length) {
+            $message = drupal_substr($message, 0, $message_length - 3) . '...';
+        }
+
+        // Decode special symbols.
+        $message = html_entity_decode($message, ENT_QUOTES, 'UTF-8');
+        $message = htmlspecialchars_decode($message);
+
+        return $message;
+    }
+
+    /**
+     * Makes http query to api server to get upload uri.
+     *
+     * @return string|bool
+     *  Upload url on success or FALSE on failure.
+     */
+    function _mass_social_get_upload_server($data) {
+        $params = array();
+        if ($data['vkxp_wall_owner'] == 'group') {
+            $params['gid'] = $data['vkxp_owner_id'];
+        }
+        else {
+            $params['uid'] = $data['vkxp_owner_id'];
+        }
+        $params['access_token'] = $data['vkxp_token'];
+        $result = vkxp_query('photos.getWallUploadServer', $params);
+        if ($result['response']['upload_url']) {
+            return $result['response']['upload_url'];
+        }
+        elseif ($result['error']) {
+            _mass_social_watchdog(array(
+                'text' => t('Unable to recieve upload server. Error: !error',
+                    array('!error' => $result['error']['error_msg'])),
+                'severity' => 'error'));
+        }
+        return FALSE;
+    }
+
+    /**
+     * Upload and save images to vk server.
+     *
+     * @param  $upload_url
+     *   Url of upload server.
+     * @param  $images
+     *   Array of images to upload.
+     *
+     * @return string
+     *   Uploaded image IDs separated by comma.
+     *   Example: photo312312_3123123,photo312312_3123124.
+     */
+    function _mass_social_upload_images($upload_url, $images, $data) {
+
+        // Array with saved image IDs.
+        $image_ids = array();
+        foreach ($images as $image) {
+
+            // Upload photo to vk server.
+            $upload_result = mass_social_query('', array('photo' => $image), $upload_url);
+
+            // If photo was uploaded it should be saved.
+            if (isset($upload_result['server']) && isset($upload_result['photo']) && isset($upload_result['hash'])) {
+                $params = array();
+                $params['access_token'] = $data['vkxp_token'];
+                $params['server']       = $upload_result['server'];
+                $params['photo']        = $upload_result['photo'];
+                $params['hash']         = $upload_result['hash'];
+
+                // Get owner ID depends on its type.
+                if ($data['vkxp_wall_owner'] == 'group') {
+                    $params['gid'] = $data['vkxp_owner_id'];
+                }
+                else {
+                    $params['uid'] = $data['vkxp_owner_id'];
+                }
+
+                // Save uploaded images.
+                $save_result = mass_social_query('photos.saveWallPhoto', $params);
+
+                // If image was successfully saved it returns photo ID in format 'photoXXXXXXX_XXXXXXX'.
+                if (isset($save_result['response'][0]['id'])) {
+                    $image_ids[] = $save_result['response'][0]['id'];
+                }
+            }
+        }
+
+        return !empty($image_ids) ? implode (',', $image_ids) : '';
+    }
+
+    /**
+     * Post node message with uploaded images to wall.
+     *
+     * @param  $message
+     *   Text to post.
+     * @param  $images
+     *   String with photo IDs to post.
+     * @param  $url
+     *   Absolute link to posted node.
+     *
+     * @return array
+     *   Server response.
+     */
+    function _mass_social_post_to_wall($message, $images, $url, $data) {
+        $params = array();
+        $params['from_group'] = (boolean) $data["vkxp_official"];
+        if ($data["vkxp_wall_owner"] == 'group') {
+            $params['owner_id'] = '-' . $data['vkxp_owner_id'];
+        }
+        else {
+            $params['owner_id'] = $data['vkxp_owner_id'];
+        }
+        $params['message']     = $message;
+        $params['attachments'] = $images;
+
+        if ((boolean) $data['vkxp_add_link']) {
+            $params['attachments'] .= !empty($images) ? ',' . $url : $url;
+        }
+        $params['access_token'] = $data['vkxp_token'];
+
+        // Send query to VK and return result.
+        return mass_social_query('wall.post', $params);
+    }
+
+
+
+    /**
+     * Function makes http query to VK.
+     * Allows using hook_vkxp_query_alter() for altering query params.
+     */
+    function mass_social_query($method, $params, $request_url = VKXP_API_REQUEST_URI) {
+
+        // Collect query data.
+        $query = array();
+        $query['method'] = $method;
+        $query['params'] = $params;
+        $query['request_url'] = $request_url;
+        drupal_alter('mass_social_query', $query);
+
+        // cURL request to VK.
+        $curl = curl_init();
+        curl_setopt ($curl, CURLOPT_URL, $query['request_url'] . '/' . $query['method']);
+        curl_setopt ($curl, CURLOPT_POST, 1);
+        curl_setopt ($curl, CURLOPT_POSTFIELDS, $query['params']);
+        curl_setopt ($curl, CURLOPT_SSL_VERIFYPEER, FALSE);
+        curl_setopt ($curl, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($curl, CURLOPT_PROXY, "217.76.38.69:3128");
+        $result = curl_exec($curl);
+        curl_close($curl);
+
+        var_dump(drupal_json_decode($result));
+        die();
+        // Return request result.
+        return drupal_json_decode($result);
+    }
+
+
+    /**
+     * Log messages and print it on the screen.
+     *
+     * @param $message
+     *   Array with message and it severity.
+     *
+     * @param $link
+     *   Link to view node.
+     */
+    function _mass_social_watchdog($message, $link = NULL) {
+
+        // Set message about event.
+        drupal_set_message($message['text'], $message['severity']);
+
+        // Log event into watchdog.
+        if ($message['severity'] == 'status') {
+            $severity = WATCHDOG_INFO;
+        }
+        elseif ($message['severity'] == 'warning') {
+            $severity = WATCHDOG_WARNING;
+        }
+        else {
+            $severity = WATCHDOG_ERROR;
+        }
+
+        watchdog('mass_social', $message['text'], array(), $severity, $link);
+    }

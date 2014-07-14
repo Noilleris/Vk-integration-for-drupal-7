@@ -1,0 +1,17 @@
+<?php
+	function mass_social_uninstall() {
+		cache_clear_all('mass_social','cache',TRUE);
+		menu_rebuild();
+	}
+	function mass_social_schema() {
+		$schema['mass_social'] = array(
+			'fields' => array(
+			  'id' => array('type' => 'serial', 'not null' => TRUE),
+			  'network_name' => array('type' => 'varchar', 'length' => 255, 'not null' => TRUE),
+			  'data' => array('type' => 'blob', 'size' => 'normal', 'not null' => TRUE)
+			),
+			'primary key' => array('id'),
+		);
+		return $schema;
+	}
+?>
